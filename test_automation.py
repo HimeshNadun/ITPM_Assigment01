@@ -262,22 +262,30 @@ def _clear_textarea(page, locator, attempts: int = 3):
 
 def _ensure_input_value(page, input_locator, text: str, type_delay_ms: int):
     _clear_textarea(page, input_locator)
-    if type_delay_ms and int(type_delay_ms) > 0:
-        input_locator.click(timeout=2000)
-        input_locator.type(text, delay=int(type_delay_ms))
-    else:
-        input_locator.fill(text)
+    try:
+        if type_delay_ms and int(type_delay_ms) > 0 and len(text) <= 120:
+            input_locator.click(timeout=4000)
+            input_locator.type(text, delay=int(type_delay_ms))
+        else:
+            input_locator.fill(text)
+    except Exception:
+        try:
+            input_locator.fill(text)
+        except Exception:
+            pass
+    page.wait_for_timeout(250)
     try:
         current = input_locator.input_value()
-        if current is None:
-            return
-        if str(current).strip() == text.strip():
+        if current is not None and str(current).strip() == text.strip():
             return
     except Exception:
-        return
-    page.wait_for_timeout(150)
+        pass
     _clear_textarea(page, input_locator)
-    input_locator.fill(text)
+    try:
+        input_locator.fill(text)
+    except Exception:
+        pass
+    page.wait_for_timeout(250)
 
 def _read_output(is_chat: bool, output_locator) -> str:
     if is_chat:
@@ -513,7 +521,17 @@ def run_test():
                     page.wait_for_timeout(max(0, int(args.retry_wait_ms)))
 
                 if prev_output and actual_output == "" and prev_output != "":
-                    raise RuntimeError("Output did not update for this input (still showing previous output).")
+                    if action_locator:
+                        try:
+                            action_locator.click()
+                            page.wait_for_timeout(max(0, int(args.retry_wait_ms)))
+                            current = _read_output(is_chat, output_locator)
+                            if current and current != prev_output:
+                                actual_output = current
+                        except Exception:
+                            pass
+                    if prev_output and actual_output == "" and prev_output != "":
+                        raise RuntimeError("Output did not update for this input (still showing previous output).")
 
                 _set_cell_value(ws, row_index, actual_col_idx, actual_output)
 
